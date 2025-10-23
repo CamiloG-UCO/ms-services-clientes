@@ -40,8 +40,9 @@ public class ClientService {
     }
 
     @Transactional(readOnly = true)
-    public Optional<Client> findByDocument(String documentType, String documentNumber) {
-        return repository.findByDocumentTypeAndDocumentNumber(documentType, documentNumber);
+    public Optional<Client> findByDocument(String documentNumber) {
+        System.out.println("entro al metodo");
+        return repository.findByDocumentNumber(documentNumber);
     }
 
     @Transactional(readOnly = true)

@@ -41,16 +41,17 @@ public class ClientController {
 
     @GetMapping("/document")
     public ResponseEntity<Client> findByDocument(
-            @RequestParam("type") String documentType,
             @RequestParam("number") String documentNumber) {
-        Optional<Client> client = service.findByDocument(documentType, documentNumber);
+        System.out.println("Paso 1");
+        Optional<Client> client = service.findByDocument(documentNumber);
+        System.out.println("PAso 2");
         return client.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @GetMapping("/email")
     public ResponseEntity<Client> findByEmail(@RequestParam("email") String email) {
         Optional<Client> client = service.findByEmail(email);
-        return client.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+        return client.map(ResponseEntity::ok).orElseGet(()-> ResponseEntity.notFound().build());
     }
 
     @GetMapping("/phone")
