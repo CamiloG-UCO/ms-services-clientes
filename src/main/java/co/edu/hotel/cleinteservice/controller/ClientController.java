@@ -42,9 +42,7 @@ public class ClientController {
     @GetMapping("/document")
     public ResponseEntity<Client> findByDocument(
             @RequestParam("number") String documentNumber) {
-        System.out.println("Paso 1");
         Optional<Client> client = service.findByDocument(documentNumber);
-        System.out.println("PAso 2");
         return client.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 

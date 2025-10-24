@@ -6,21 +6,19 @@ import org.junit.runner.RunWith;
 
 @RunWith(Cucumber.class)
 @CucumberOptions(
-        features = "src/test/resources/features/Get.feature",
+        features = "src/test/resources/features",
         glue = {
-                "co.edu.hotel.cleinteservice.steps",   // tus Step Definitions
-                "co.edu.hotel.cleinteservice",         // contexto Spring Boot
-                "io.cucumber.spring"                   // hooks de Cucumber-Spring
+                "co.edu.hotel.cleinteservice.steps",
+                "co.edu.hotel.cleinteservice.config"
         },
         plugin = {
                 "pretty",
-                "html:target/cucumber-reports/consultar-clientes-report.html",
-                "json:target/cucumber-reports/consultar-clientes.json"
+                "html:target/cucumber-reports/html-report.html",
+                "json:target/cucumber-reports/cucumber.json"
         },
         snippets = CucumberOptions.SnippetType.CAMELCASE,
         monochrome = true,
-        tags = "@ConsultarClientes" // puedes cambiarlo según el tag del feature
+        tags = ""
 )
 public class GetTestRunner {
-    // Runner específico para el escenario de consulta
 }
