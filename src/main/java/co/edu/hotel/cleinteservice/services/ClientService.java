@@ -98,4 +98,23 @@ public class ClientService {
     public boolean existsByPhone(String phone) {
         return repository.existsByPhone(phone);
     }
+
+    @Transactional
+    public void updateClient(Client client) {
+        Optional<Client> clientOptional = repository.findById(client.getId());
+
+        if (clientOptional.isPresent()) {
+            Client cliente = clientOptional.get();
+            cliente.setName(client.getName());
+            cliente.setEmail(client.getEmail());
+            cliente.setPhone(client.getPhone());
+            cliente.setDocumentNumber(client.getDocumentNumber());
+
+            repository.save(cliente);
+        }else {
+            throw new IllegalArgumentException("el cliente no fue encontrado");
+        }
+
+
+    }
 }
