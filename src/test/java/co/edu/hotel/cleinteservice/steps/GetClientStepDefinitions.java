@@ -129,6 +129,14 @@ public class GetClientStepDefinitions {
         assertEquals(HttpStatus.OK, clientResponse.getStatusCode());
         assertNotNull(clientResponse.getBody());
         assertEquals(cedula, clientResponse.getBody().getDocumentNumber());
+
+        Client cliente = clientResponse.getBody();
+        System.out.println("📋 Datos del cliente encontrado:");
+        System.out.println("Nombre: " + cliente.getName());
+        System.out.println("Apellidos: " + cliente.getLastNames());
+        System.out.println("Cédula: " + cliente.getDocumentNumber());
+        System.out.println("Correo: " + cliente.getEmail());
+        System.out.println("Teléfono: " + cliente.getPhone());
     }
 
     @Entonces("debe mostrar su nombre, correo, teléfono y fecha de registro")
