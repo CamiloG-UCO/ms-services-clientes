@@ -1,15 +1,14 @@
 package co.edu.hotel.cleinteservice.controller;
 
 import co.edu.hotel.cleinteservice.domain.Client;
+import co.edu.hotel.cleinteservice.domain.DocumentType;
 import co.edu.hotel.cleinteservice.services.ClientService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.net.URI;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/clientes")
@@ -23,15 +22,19 @@ public class ClientController {
     }
 
     @PostMapping
-    public ResponseEntity<Client> create(@RequestBody Client client) {
-        Client saved = service.create(client);
-        // Intentar crear Location con el id si está disponible
-        String idPath = saved.getId() != null ? saved.getId().toString() : "";
-        HttpHeaders headers = new HttpHeaders();
-        if (!idPath.isBlank()) {
-            headers.setLocation(URI.create("/clients/" + idPath));
+    public ResponseEntity<?> create(@RequestBody Client client) {
+        try {
+            Client saved = service.create(client);
+            String idPath = saved.getId() != null ? saved.getId().toString() : "";
+            HttpHeaders headers = new HttpHeaders();
+            if (!idPath.isBlank()) {
+                headers.setLocation(URI.create("/clients/" + idPath));
+            }
+            return new ResponseEntity<>(saved, headers, HttpStatus.CREATED);
+        } catch (IllegalArgumentException ex) {
+            // Si hay validación de duplicados
+            return ResponseEntity.badRequest().body(ex.getMessage());
         }
-        return new ResponseEntity<>(saved, headers, HttpStatus.CREATED);
     }
 
     @GetMapping
@@ -61,8 +64,14 @@ public class ClientController {
 
     @GetMapping("/exists/document")
     public ResponseEntity<Boolean> existsByDocument(
-            @RequestParam("type") String documentType,
+            @RequestParam("type") String documentTypeStr,
             @RequestParam("number") String documentNumber) {
+        // Verificar si el string coincide con algún valor del enum
+        boolean validType = Arrays.stream(DocumentType.values()).anyMatch(d -> d.name().equalsIgnoreCase(documentTypeStr));
+        if (!validType) {// Si el tipo de documento no es válido, devolvemos false o 400
+            return ResponseEntity.badRequest().body(false);
+        }
+        DocumentType documentType = DocumentType.valueOf(documentTypeStr.toUpperCase());
         boolean exists = service.existsByDocument(documentType, documentNumber);
         return ResponseEntity.ok(exists);
     }
@@ -87,6 +96,20 @@ public class ClientController {
             return client.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
         } catch (Exception ex) {
             return ResponseEntity.notFound().build();
+        }
+    }
+
+    @PutMapping
+    public ResponseEntity<Object> update(@RequestBody Client client) {
+        try {
+            service.updateClient(client);
+            return ResponseEntity.status(HttpStatus.OK).body("Cliente actualizado correctamente");
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception ex) {
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", "Error interno del servidor"));
         }
     }
 }
