@@ -20,9 +20,9 @@ Característica: Consultar clientes registrados
     Y debe mostrar su nombre, correo, teléfono y fecha de registro
 
   Escenario: Buscar cliente por nombre
-    Dado que existe un cliente con nombre "Andres"
-    Cuando busque el cliente por nombre "Andres"
-    Entonces el sistema debe mostrar los clientes que coinciden con "Andres"
+    Dado que existe un cliente con nombre "Santiago"
+    Cuando busque el cliente por nombre "Santiago"
+    Entonces el sistema debe mostrar los clientes que coinciden con "Santiago"
 
   Escenario: Buscar cliente por correo electrónico
     Dado que existe un cliente con correo "andres@gmail.com"
