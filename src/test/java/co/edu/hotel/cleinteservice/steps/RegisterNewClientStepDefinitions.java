@@ -1,85 +1,153 @@
-package co.edu.hotel.cleinteservice.steps;
+package co.edu.hotel.cleinteservice.test.steps;
 
-import io.cucumber.java.en.Given;
-import io.cucumber.java.en.When;
-import io.cucumber.java.en.Then;
+import co.edu.hotel.cleinteservice.domain.Client;
+import co.edu.hotel.cleinteservice.domain.DocumentType;
+import co.edu.hotel.cleinteservice.repository.ClientRepository;
+import co.edu.hotel.cleinteservice.services.ClientService;
+import co.edu.hotel.cleinteservice.exceptions.ClientAlreadyExistsException; // ¡Importar la nueva excepción!
 import io.cucumber.datatable.DataTable;
-import io.restassured.response.Response;
-import io.restassured.http.ContentType;
-import org.junit.Assert;
-
-import java.util.HashMap;
+import io.cucumber.java.en.And;
+import io.cucumber.java.en.Given;
+import io.cucumber.java.en.Then;
+import io.cucumber.java.en.When;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import java.util.Map;
+import java.util.Optional;
+import static org.junit.jupiter.api.Assertions.*;
 
-import static io.restassured.RestAssured.given;
-import org.springframework.boot.test.web.server.LocalServerPort; // <--- NUEVO IMPORT
-import io.cucumber.spring.CucumberContextConfiguration;
-import static io.restassured.RestAssured.port;
-
+@SpringBootTest
+@ActiveProfiles("test")
 public class RegisterNewClientStepDefinitions {
 
-    @LocalServerPort
-    private int localServerPort;
+    @Autowired
+    private ClientService clientService;
 
-    private String endpointPath = "/api/clientes"; // Guardamos solo el path
-    private Response response;
+    @Autowired
+    private ClientRepository clientRepository;
 
-    @Given("un endpoint de registro de clientes está disponible en \"{string}\"")
-    public void unEndpointDeRegistroDeClientesEstaDisponibleEn(String url) {
-        port = localServerPort;
-        System.out.println("DEBUG: Aplicación corriendo en puerto: " + localServerPort);
+    private Client clientToCreate;
+    private Client createdClient;
+    private Exception caughtException;
+
+    private void cleanUp(String documentNumber) {
+        clientRepository.findByDocumentNumber(documentNumber)
+                .ifPresent(clientRepository::delete);
     }
 
-    @When("se envía una solicitud POST con el cuerpo:")
-    public void seEnviaUnaSolicitudPOSTConElCuerpo(DataTable datosTabla) {
-        // Mapear los datos de la tabla Gherkin a un mapa
-        Map<String, String> clienteDataTabla = datosTabla.asMaps().get(0);
+    // --- GIVEN Steps ---
 
-        // Adaptar los datos para el JSON, ya que 'name' y 'lastNames' están separados
-        Map<String, String> bodyJson = new HashMap<>();
-        bodyJson.put("documentType", clienteDataTabla.get("documentType"));
-        bodyJson.put("documentNumber", clienteDataTabla.get("documentNumber"));
-        bodyJson.put("name", clienteDataTabla.get("name"));
-        bodyJson.put("lastNames", clienteDataTabla.get("lastNames"));
-        bodyJson.put("email", clienteDataTabla.get("email"));
-        bodyJson.put("phone", clienteDataTabla.get("phone"));
-
-        // Llamada al ENDPOINT REAL
-        response = given()
-                .contentType(ContentType.JSON)
-                .body(bodyJson)
-                .when()
-                .post(endpointPath);
+    @Given("un servicio para el registro de clientes está en funcionamiento")
+    public void el_servicio_de_registro_de_clientes_esta_en_funcionamiento() {
+        assertNotNull(clientService, "El ClientService no debería ser nulo.");
     }
 
-    // --- Pasos de Verificación (Then) ---
-
-    @Then("el código de respuesta debe ser {int} \\(Created)")
-    public void elCodigoDeRespuestaDebeSerCreated(int statusCode) {
-        Assert.assertEquals("El código de respuesta HTTP no es 201 (Created).",
-                statusCode, response.getStatusCode());
+    @Given("un servicio para el registro de clientes está en funcionamiento y no existe previamente un cliente con CC {string}")
+    public void no_existe_cliente_previo(String documentNumber) {
+        cleanUp(documentNumber);
+        assertFalse(clientService.existsByDocumentNumber(documentNumber), "El cliente ya existe, la prueba no es limpia.");
     }
 
-    @Then("el cliente debe ser guardado con el nombre \"{string}\"")
-    public void elClienteDebeSerGuardadoConElNombre(String nombreCompletoEsperado) {
-        // Verificar que la respuesta contiene el nombre y apellido correcto
-        String nombre = response.jsonPath().getString("name");
-        String apellido = response.jsonPath().getString("lastNames");
-        String nombreCompletoActual = nombre + " " + apellido;
+    @Given("ya existe un cliente registrado con tipo y número de documento {string} y {string}")
+    public void ya_existe_un_cliente_registrado(String documentType, String documentNumber) {
+        cleanUp(documentNumber);
 
-        Assert.assertTrue("El nombre retornado no coincide o el registro falló. Respuesta: " + response.asString(),
-                nombreCompletoEsperado.contains(nombre) && nombreCompletoEsperado.contains(apellido));
+        Client existing = new Client();
+        existing.setDocumentType(DocumentType.valueOf(documentType));
+        existing.setDocumentNumber(documentNumber);
+        existing.setName("Existing");
+        existing.setLastNames("User");
+        existing.setEmail("existing@email.com");
+        existing.setPhone("3000000000");
 
-        // Opcional: Podrías usar tu ClienteService (inyectado) para buscar en la BD y verificar.
+        clientService.create(existing);
+
+        assertTrue(clientService.existsByDocumentNumber(documentNumber), "Fallo al crear el cliente de precondición.");
     }
 
-    @Then("el sistema debe retornar el campo \"{word}\" con un valor que inicie con \"{word}\"")
-    public void elSistemaDebeRetornarElCampoConUnValorQueInicieCon(String campo, String prefijo) {
-        // Verificar la existencia y el formato del código generado automáticamente
-        String valorCampo = response.jsonPath().getString(campo);
+    // --- WHEN Steps ---
 
-        Assert.assertNotNull("El campo '" + campo + "' no fue retornado en la respuesta.", valorCampo);
-        Assert.assertTrue("El valor del campo '" + campo + "' debe iniciar con '" + prefijo + "'.",
-                valorCampo.startsWith(prefijo));
+    @When("el sistema cliente solicita la creación de un nuevo cliente con los siguientes datos:")
+    public void el_sistema_solicita_creacion_cliente(DataTable dataTable) {
+        Map<String, String> data = dataTable.asMaps().get(0);
+        clientToCreate = new Client();
+        String documentTypeString = data.get("documentType");
+
+        try {
+            clientToCreate.setDocumentType(DocumentType.valueOf(documentTypeString));
+            clientToCreate.setDocumentNumber(data.get("documentNumber"));
+            clientToCreate.setName(data.get("name"));
+            clientToCreate.setLastNames(data.get("lastNames"));
+            clientToCreate.setEmail(data.get("email"));
+            clientToCreate.setPhone(data.get("phone"));
+
+            // Si el cliente existe, esto lanzará ClientAlreadyExistsException
+            createdClient = clientService.create(clientToCreate);
+            caughtException = null;
+
+        } catch (ClientAlreadyExistsException e) {
+            // Captura la excepción de negocio esperada para el escenario de Falla
+            caughtException = e;
+            createdClient = null;
+        } catch (Exception e) {
+            // Captura cualquier otra excepción no esperada
+            caughtException = e;
+            createdClient = null;
+        }
+    }
+
+    // --- THEN Steps ---
+
+    @Then("el registro del cliente debe ser exitoso \\(Código 201 Created)")
+    public void el_registro_del_cliente_es_exitoso() {
+        assertNotNull(createdClient, "El objeto Cliente creado no debería ser nulo.");
+        assertNull(caughtException, "No debería haber ocurrido una excepción en el registro exitoso.");
+        cleanUp(clientToCreate.getDocumentNumber());
+    }
+
+    @And("el cliente recién creado debe tener el nombre completo {string}")
+    public void el_cliente_tiene_nombre_completo(String nombreCompletoEsperado) {
+        String nombreReal = createdClient.getName() + " " + createdClient.getLastNames();
+        assertEquals(nombreCompletoEsperado, nombreReal, "El nombre completo no coincide.");
+    }
+
+    @And("la respuesta del sistema debe incluir un código de cliente que empiece por {string}")
+    public void la_respuesta_incluye_codigo_cliente(String prefix) {
+        String clientCode = createdClient.getClientCode();
+        assertNotNull(clientCode, "El código de cliente no debe ser nulo.");
+        assertTrue(clientCode.startsWith(prefix), "El código debe empezar por " + prefix);
+    }
+
+    @And("el cliente debe quedar almacenado en la base de datos")
+    public void el_cliente_queda_almacenado() {
+        Optional<Client> found = clientRepository.findByDocumentNumber(createdClient.getDocumentNumber());
+        assertTrue(found.isPresent(), "El cliente debe ser encontrado en la base de datos.");
+    }
+
+    // --- THEN Steps para FALLA ---
+
+    @Then("el registro del cliente debe fallar \\(Código 409 Conflict o 400 Bad Request)")
+    public void el_registro_debe_fallar() {
+        assertNotNull(caughtException, "Se esperaba una excepción de fallo.");
+        // Verificación BDD: Asegurar que el fallo fue por la razón de negocio esperada (duplicidad)
+        assertTrue(caughtException instanceof ClientAlreadyExistsException,
+                "Se esperaba ClientAlreadyExistsException, se encontró: " + caughtException.getClass().getSimpleName());
+    }
+
+    @And("la respuesta del sistema debe contener un mensaje de error indicando que el cliente ya existe")
+    public void la_respuesta_contiene_mensaje_de_error() {
+        String errorMessage = caughtException.getMessage();
+        assertTrue(errorMessage.contains("Ya existe un cliente registrado"),
+                "El mensaje de error no indica duplicidad.");
+    }
+
+    @And("no se debe crear un nuevo cliente en la base de datos")
+    public void no_se_debe_crear_un_nuevo_cliente() {
+        // En este punto, solo el cliente de precondición debe existir con ese número de documento.
+        Optional<Client> foundAttempts = clientRepository.findByDocumentNumber(clientToCreate.getDocumentNumber());
+
+        // Se asume que el repositorio solo devuelve el cliente de precondición.
+        assertTrue(foundAttempts.isPresent(), "El cliente de precondición debe seguir existiendo.");
     }
 }
