@@ -1,10 +1,13 @@
 package co.edu.hotel.cleinteservice.services;
 
 import co.edu.hotel.cleinteservice.domain.Client;
+import co.edu.hotel.cleinteservice.domain.DocumentType;
 import co.edu.hotel.cleinteservice.repository.ClientRepository;
 import co.edu.hotel.cleinteservice.services.ClientCodeGenerator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -22,6 +25,30 @@ public class ClientService {
 
     @Transactional
     public Client create(Client client) {
+        DocumentType documentType = client.getDocumentType();
+        String documentNumber = client.getDocumentNumber();
+        String phone = client.getPhone();
+        //validaciones
+        if (documentType == null) {
+            throw new IllegalArgumentException(
+                    "El tipo de documento no puede ser nulo. Debe ser uno de: CC, CE, NIT, PPT, PASSPORT"
+            );
+        }
+        if (documentNumber == null || !documentNumber.matches("\\d+")) {
+            throw new IllegalArgumentException("El número de documento solo debe contener números.");
+        }
+        if (phone == null || !phone.matches("\\d+")) {
+            throw new IllegalArgumentException("El número de teléfono solo debe contener números.");
+        }
+        if (existsByDocument(documentType,documentNumber)) {
+            throw new IllegalArgumentException("Cliente ya registrado: documento duplicado");
+        }
+        if (existsByEmail(client.getEmail())) {
+            throw new IllegalArgumentException("Cliente ya registrado: correo duplicado");
+        }
+        if (existsByPhone(client.getPhone())) {
+            throw new IllegalArgumentException("Usuario ya registrado: teléfono duplicado");
+        }
         if (client.getClientCode() == null || client.getClientCode().isBlank()) {
             // Busca el último código con el prefijo
             Optional<Client> last = repository.findTopByClientCodeStartingWithOrderByClientCodeDesc(PREFIX);
@@ -46,7 +73,8 @@ public class ClientService {
     }
 
     @Transactional(readOnly = true)
-    public boolean existsByDocument(String documentType, String documentNumber) {
+    public boolean existsByDocument(DocumentType  documentType, String documentNumber) {
+        if (documentType == null || documentNumber == null || documentNumber.isBlank()) return false;
         return repository.existsByDocumentTypeAndDocumentNumber(documentType, documentNumber);
     }
 
@@ -61,14 +89,10 @@ public class ClientService {
     }
 
     @Transactional(readOnly = true)
-    public boolean existsByDocumentNumber(String documentNumber) {
-        return repository.existsByDocumentNumber(documentNumber);
-    }
+    public boolean existsByDocumentNumber(String documentNumber) {return repository.existsByDocumentNumber(documentNumber);}
 
     @Transactional(readOnly = true)
-    public boolean existsByEmail(String email) {
-        return repository.existsByEmail(email);
-    }
+    public boolean existsByEmail(String email) {return repository.existsByEmail(email);}
 
     @Transactional(readOnly = true)
     public boolean existsByPhone(String phone) {

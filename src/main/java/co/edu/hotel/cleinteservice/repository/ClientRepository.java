@@ -1,6 +1,7 @@
 package co.edu.hotel.cleinteservice.repository;
 
 import co.edu.hotel.cleinteservice.domain.Client;
+import co.edu.hotel.cleinteservice.domain.DocumentType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
@@ -18,7 +19,7 @@ public interface ClientRepository extends JpaRepository<Client, UUID> {
     Optional<Client> findByPhone(String phone);
 
     // Comprobaciones de existencia
-    boolean existsByDocumentTypeAndDocumentNumber(String documentType, String documentNumber);
+    boolean existsByDocumentTypeAndDocumentNumber(DocumentType documentType, String documentNumber);
     boolean existsByDocumentNumber(String documentNumber);
     boolean existsByEmail(String email);
     boolean existsByPhone(String phone);
