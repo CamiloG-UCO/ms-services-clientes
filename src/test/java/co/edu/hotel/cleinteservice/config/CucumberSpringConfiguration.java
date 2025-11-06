@@ -1,16 +1,14 @@
+// src/test/java/co/edu/hotel/cleinteservice/config/CucumberSpringConfiguration.java
 package co.edu.hotel.cleinteservice.config;
 
-import co.edu.hotel.cleinteservice.MsServicesClienteApplication;
 import io.cucumber.spring.CucumberContextConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 @CucumberContextConfiguration
-@SpringBootTest(classes = MsServicesClienteApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureMockMvc(addFilters = false)
 @ActiveProfiles("test")
-@Import(TestSecurityConfig.class)
-public class CucumberSpringConfiguration {
-    // Esta clase no necesita código dentro.
-    // Sirve para inicializar el contexto de Spring para Cucumber.
-}
+public class CucumberSpringConfiguration {}
