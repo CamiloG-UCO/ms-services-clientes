@@ -104,6 +104,7 @@ public class ClientService {
             c.setEmail(client.getEmail());
             c.setPhone(client.getPhone());
             c.setDocumentNumber(client.getDocumentNumber());
+            c.setDocumentType(client.getDocumentType());
             repository.save(c);
         } else {
             throw new IllegalArgumentException("el cliente no fue encontrado");
