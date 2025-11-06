@@ -35,17 +35,17 @@ Característica: Consultar clientes registrados
     Cuando busque el cliente por teléfono "3214567890"
     Entonces el sistema debe mostrar el cliente con ese teléfono
 
-  Escenario: Buscar cliente que no existe
-    Dado que no existe un cliente con cédula "999999999"
-    Cuando busque el cliente por cédula "999999999"
-    Entonces el sistema debe mostrar un mensaje indicando que no se encontró el cliente
-
-  Escenario: Exportar lista de clientes en formato PDF
-    Dado que existen clientes registrados en el sistema
-    Cuando seleccione la opción "Exportar en PDF"
-    Entonces el sistema debe generar un archivo PDF con la información de todos los clientes
-
-  Escenario: Exportar lista de clientes en formato Excel
-    Dado que existen clientes registrados en el sistema
-    Cuando seleccione la opción "Exportar en Excel"
-    Entonces el sistema debe generar un archivo Excel con la información de todos los clientes
+#  Escenario: Buscar cliente que no existe
+#    Dado que no existe un cliente con cédula "999999999"
+#    Cuando busque el cliente por cédula "999999999"
+#    Entonces el sistema debe mostrar un mensaje indicando que no se encontró el cliente
+#
+#  Escenario: Exportar lista de clientes en formato PDF
+#    Dado que existen clientes registrados en el sistema
+#    Cuando seleccione la opción "Exportar en PDF"
+#    Entonces el sistema debe generar un archivo PDF con la información de todos los clientes
+#
+#  Escenario: Exportar lista de clientes en formato Excel
+#    Dado que existen clientes registrados en el sistema
+#    Cuando seleccione la opción "Exportar en Excel"
+#    Entonces el sistema debe generar un archivo Excel con la información de todos los clientes

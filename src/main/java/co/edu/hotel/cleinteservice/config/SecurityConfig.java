@@ -29,7 +29,7 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/login").permitAll()
-                        .requestMatchers("/api/clientes/**").permitAll() // ✅ permite Angular
+//                        .requestMatchers("/api/clientes/**").permitAll() // ✅ permite Angular
                         .anyRequest().authenticated()
                 )
                 .cors(Customizer.withDefaults())
