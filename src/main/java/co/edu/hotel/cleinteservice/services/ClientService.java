@@ -1,10 +1,15 @@
 package co.edu.hotel.cleinteservice.services;
 
 import co.edu.hotel.cleinteservice.domain.Client;
+import co.edu.hotel.cleinteservice.domain.ClientCodeGenerator;
+import co.edu.hotel.cleinteservice.domain.DocumentType;
+import co.edu.hotel.cleinteservice.dto.ClientResponse;
+import co.edu.hotel.cleinteservice.dto.CreateClientRequest;
 import co.edu.hotel.cleinteservice.repository.ClientRepository;
-import co.edu.hotel.cleinteservice.exceptions.ClientAlreadyExistsException; // Importar nueva excepción
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -12,37 +17,41 @@ import java.util.Optional;
 public class ClientService {
 
     private final ClientRepository repository;
-    private final ClientCodeGenerator codeGenerator;
-    private static final String PREFIX = "CLI-";
+    private final ClientCodeGenerator codeGenerator = new ClientCodeGenerator();
 
-    public ClientService(ClientRepository repository, ClientCodeGenerator codeGenerator) {
+    public ClientService(ClientRepository repository) {
         this.repository = repository;
-        this.codeGenerator = codeGenerator;
     }
 
     @Transactional
-    public Client create(Client client) {
-        // --- VALIDACIÓN DE NEGOCIO: Evitar duplicidad de documentos ---
-        if (existsByDocument(client.getDocumentType().toString(), client.getDocumentNumber())) {
-            throw new ClientAlreadyExistsException(
-                    client.getDocumentType().toString(),
-                    client.getDocumentNumber()
-            );
-        }
-        // -------------------------------------------------------------
+    public ClientResponse create(CreateClientRequest r) {
+        if (repository.existsByDocumentTypeAndDocumentNumber(r.documentType(), r.documentNumber()))
+            throw new IllegalArgumentException("Cliente ya existe (documento)");
+        if (repository.existsByEmail(r.email()))
+            throw new IllegalArgumentException("Cliente ya existe (email)");
 
-        if (client.getClientCode() == null || client.getClientCode().isBlank()) {
-            // Busca el último código con el prefijo
-            Optional<Client> last = repository.findTopByClientCodeStartingWithOrderByClientCodeDesc(PREFIX);
+        String clientCode = codeGenerator.next();
 
-            if (last.isEmpty() || last.get().getClientCode() == null) {
-                client.setClientCode(PREFIX + "0001");
-            } else {
-                // Se usa el generador para asegurar la secuencia
-                client.setClientCode(codeGenerator.generate(PREFIX));
-            }
+        Client client = Client.builder()
+                .clientCode(clientCode)
+                .documentType(r.documentType())
+                .documentNumber(r.documentNumber())
+                .name(r.name())
+                .lastNames(r.lastNames())
+                .email(r.email())
+                .phone(r.phone())
+                .build();
+
+        try {
+            repository.save(client);
+        } catch (DataIntegrityViolationException e) {
+            // fallback por si llegan duplicados concurrentes
+            throw new IllegalArgumentException("Duplicidad detectada");
         }
-        return repository.save(client);
+        return new ClientResponse(client.getClientCode(),
+                r.name() + " " + r.lastNames(),
+                r.email(),
+                r.phone());
     }
 
     @Transactional(readOnly = true)
@@ -51,13 +60,13 @@ public class ClientService {
     }
 
     @Transactional(readOnly = true)
-    public Optional<Client> findByDocument(String documentType, String documentNumber) {
-        return repository.findByDocumentTypeAndDocumentNumber(documentType, documentNumber);
+    public Optional<Client> findByDocument(String documentNumber) {
+        return repository.findByDocumentNumber(documentNumber);
     }
 
     @Transactional(readOnly = true)
-    public boolean existsByDocument(String documentType, String documentNumber) {
-        // Nota: Asumiendo que DocumentType.toString() es el valor que usa el repositorio.
+    public boolean existsByDocument(DocumentType documentType, String documentNumber) {
+        if (documentType == null || documentNumber == null || documentNumber.isBlank()) return false;
         return repository.existsByDocumentTypeAndDocumentNumber(documentType, documentNumber);
     }
 
@@ -84,5 +93,21 @@ public class ClientService {
     @Transactional(readOnly = true)
     public boolean existsByPhone(String phone) {
         return repository.existsByPhone(phone);
+    }
+
+    @Transactional
+    public void updateClient(Client client) {
+        Optional<Client> clientOptional = repository.findById(client.getId());
+        if (clientOptional.isPresent()) {
+            Client c = clientOptional.get();
+            c.setName(client.getName());
+            c.setEmail(client.getEmail());
+            c.setPhone(client.getPhone());
+            c.setDocumentNumber(client.getDocumentNumber());
+            c.setDocumentType(client.getDocumentType());
+            repository.save(c);
+        } else {
+            throw new IllegalArgumentException("el cliente no fue encontrado");
+        }
     }
 }

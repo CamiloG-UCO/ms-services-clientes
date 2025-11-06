@@ -10,4 +10,4 @@ Feature: Validar duplicidad y coincidencias de clientes
       | Andrés | Ramírez   | CC            | 10254879        | andres@hotel.com | 3001234567 |
 
     When intento registrar un nuevo cliente con el mismo documento "CC" y número "10254879"
-    Then el sistema debe mostrar el mensaje "Cliente ya registrado: documento duplicado"
+    Then el sistema debe mostrar el mensaje "Cliente ya existe"

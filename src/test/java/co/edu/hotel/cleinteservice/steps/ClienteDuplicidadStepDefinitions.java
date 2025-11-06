@@ -2,6 +2,7 @@ package co.edu.hotel.cleinteservice.steps;
 
 import co.edu.hotel.cleinteservice.domain.Client;
 import co.edu.hotel.cleinteservice.domain.DocumentType;
+import co.edu.hotel.cleinteservice.dto.CreateClientRequest;
 import co.edu.hotel.cleinteservice.repository.ClientRepository;
 import co.edu.hotel.cleinteservice.services.ClientService;
 import io.cucumber.java.Before;
@@ -54,15 +55,17 @@ public class ClienteDuplicidadStepDefinitions {
 
     @When("intento registrar un nuevo cliente con el mismo documento {string} y número {string}")
     public void intentoRegistrarUnNuevoClienteConElMismoDocumentoYNúmero(String tipo, String numero) {
-        Client nuevo = new Client();
-        nuevo.setName("Catalina López");
-        nuevo.setDocumentType(DocumentType.valueOf(tipo));
-        nuevo.setDocumentNumber(numero);
-        nuevo.setEmail("catalina@hotel.com");
-        nuevo.setPhone("3007654321");
+        CreateClientRequest request = new CreateClientRequest(
+                DocumentType.valueOf(tipo),   // documentType
+                numero,                       // documentNumber
+                "Catalina",                   // name
+                "López",                      // lastNames
+                "catalina@hotel.com",         // email
+                "3007654321"                  // phone
+        );
 
         try {
-            clientService.create(nuevo);
+            clientService.create(request);
         } catch (Exception e) {
             excepcionCapturada = e;
         }

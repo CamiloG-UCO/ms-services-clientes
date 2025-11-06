@@ -2,7 +2,10 @@ package co.edu.hotel.cleinteservice.controller;
 
 import co.edu.hotel.cleinteservice.domain.Client;
 import co.edu.hotel.cleinteservice.domain.DocumentType;
+import co.edu.hotel.cleinteservice.dto.ClientResponse;
+import co.edu.hotel.cleinteservice.dto.CreateClientRequest;
 import co.edu.hotel.cleinteservice.services.ClientService;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,19 +25,10 @@ public class ClientController {
     }
 
     @PostMapping
-    public ResponseEntity<?> create(@RequestBody Client client) {
-        try {
-            Client saved = service.create(client);
-            String idPath = saved.getId() != null ? saved.getId().toString() : "";
-            HttpHeaders headers = new HttpHeaders();
-            if (!idPath.isBlank()) {
-                headers.setLocation(URI.create("/clients/" + idPath));
-            }
-            return new ResponseEntity<>(saved, headers, HttpStatus.CREATED);
-        } catch (IllegalArgumentException ex) {
-            // Si hay validación de duplicados
-            return ResponseEntity.badRequest().body(ex.getMessage());
-        }
+    public ResponseEntity<ClientResponse> create(@RequestBody CreateClientRequest req) {
+        ClientResponse res = service.create(req);
+        URI location = URI.create("/api/clientes/" + res.code());
+        return ResponseEntity.created(location).body(res); // <-- body con "code"
     }
 
     @GetMapping

@@ -1,153 +1,101 @@
-package co.edu.hotel.cleinteservice.test.steps;
+package co.edu.hotel.cleinteservice.steps;
 
-import co.edu.hotel.cleinteservice.domain.Client;
+import co.edu.hotel.cleinteservice.config.CucumberSpringConfiguration;
 import co.edu.hotel.cleinteservice.domain.DocumentType;
+import co.edu.hotel.cleinteservice.dto.CreateClientRequest;
 import co.edu.hotel.cleinteservice.repository.ClientRepository;
-import co.edu.hotel.cleinteservice.services.ClientService;
-import co.edu.hotel.cleinteservice.exceptions.ClientAlreadyExistsException; // ¡Importar la nueva excepción!
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.cucumber.datatable.DataTable;
-import io.cucumber.java.en.And;
-import io.cucumber.java.en.Given;
-import io.cucumber.java.en.Then;
-import io.cucumber.java.en.When;
+import io.cucumber.java.es.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.*;
+
 import java.util.Map;
-import java.util.Optional;
-import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
-@ActiveProfiles("test")
-public class RegisterNewClientStepDefinitions {
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-    @Autowired
-    private ClientService clientService;
+public class RegisterNewClientStepDefinitions extends CucumberSpringConfiguration {
 
-    @Autowired
-    private ClientRepository clientRepository;
+    @Autowired private MockMvc mockMvc;
+    @Autowired private ObjectMapper objectMapper;
+    @Autowired private ClientRepository repo;
 
-    private Client clientToCreate;
-    private Client createdClient;
-    private Exception caughtException;
+    private ResultActions actions;
+    private String lastBody;
 
-    private void cleanUp(String documentNumber) {
-        clientRepository.findByDocumentNumber(documentNumber)
-                .ifPresent(clientRepository::delete);
+    @Dado("el formulario de registro de clientes")
+    public void elFormularioDisponible() { /* no-op */ }
+
+    @Dado("un servicio para el registro de clientes está en funcionamiento y no existe previamente un cliente con CC {int}")
+    public void servicioOkYNoExiste(Integer docNumber) {
+        assertThat(repo.findByDocumentNumber(docNumber.toString())).isEmpty();
     }
 
-    // --- GIVEN Steps ---
+    @Cuando("el sistema cliente solicita la creación de un nuevo cliente con los siguientes datos:")
+    public void solicitaCreacion(DataTable table) throws Exception {
+        Map<String, String> row = table.asMaps().get(0);
 
-    @Given("un servicio para el registro de clientes está en funcionamiento")
-    public void el_servicio_de_registro_de_clientes_esta_en_funcionamiento() {
-        assertNotNull(clientService, "El ClientService no debería ser nulo.");
-    }
+        var req = new CreateClientRequest(
+                DocumentType.valueOf(row.get("documentType")),
+                row.get("documentNumber"),
+                row.get("name"),
+                row.get("lastNames"),
+                row.get("email"),
+                row.get("phone")
+        );
 
-    @Given("un servicio para el registro de clientes está en funcionamiento y no existe previamente un cliente con CC {string}")
-    public void no_existe_cliente_previo(String documentNumber) {
-        cleanUp(documentNumber);
-        assertFalse(clientService.existsByDocumentNumber(documentNumber), "El cliente ya existe, la prueba no es limpia.");
-    }
+        // 1) Disparamos la petición y obtenemos el MvcResult
+        ResultActions initial = mockMvc.perform(
+                post("/api/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req))
+        );
+        MvcResult result = initial.andReturn();
 
-    @Given("ya existe un cliente registrado con tipo y número de documento {string} y {string}")
-    public void ya_existe_un_cliente_registrado(String documentType, String documentNumber) {
-        cleanUp(documentNumber);
-
-        Client existing = new Client();
-        existing.setDocumentType(DocumentType.valueOf(documentType));
-        existing.setDocumentNumber(documentNumber);
-        existing.setName("Existing");
-        existing.setLastNames("User");
-        existing.setEmail("existing@email.com");
-        existing.setPhone("3000000000");
-
-        clientService.create(existing);
-
-        assertTrue(clientService.existsByDocumentNumber(documentNumber), "Fallo al crear el cliente de precondición.");
-    }
-
-    // --- WHEN Steps ---
-
-    @When("el sistema cliente solicita la creación de un nuevo cliente con los siguientes datos:")
-    public void el_sistema_solicita_creacion_cliente(DataTable dataTable) {
-        Map<String, String> data = dataTable.asMaps().get(0);
-        clientToCreate = new Client();
-        String documentTypeString = data.get("documentType");
-
-        try {
-            clientToCreate.setDocumentType(DocumentType.valueOf(documentTypeString));
-            clientToCreate.setDocumentNumber(data.get("documentNumber"));
-            clientToCreate.setName(data.get("name"));
-            clientToCreate.setLastNames(data.get("lastNames"));
-            clientToCreate.setEmail(data.get("email"));
-            clientToCreate.setPhone(data.get("phone"));
-
-            // Si el cliente existe, esto lanzará ClientAlreadyExistsException
-            createdClient = clientService.create(clientToCreate);
-            caughtException = null;
-
-        } catch (ClientAlreadyExistsException e) {
-            // Captura la excepción de negocio esperada para el escenario de Falla
-            caughtException = e;
-            createdClient = null;
-        } catch (Exception e) {
-            // Captura cualquier otra excepción no esperada
-            caughtException = e;
-            createdClient = null;
+        // 2) Si es async, hacemos asyncDispatch y guardamos en 'actions'; si no, usamos 'initial'
+        if (result.getRequest().isAsyncStarted()) {
+            this.actions = mockMvc.perform(asyncDispatch(result));
+        } else {
+            this.actions = initial;
         }
+
+        // 3) Guardamos el body para verificaciones adicionales
+        this.lastBody = this.actions.andReturn().getResponse().getContentAsString();
     }
 
-    // --- THEN Steps ---
-
-    @Then("el registro del cliente debe ser exitoso \\(Código 201 Created)")
-    public void el_registro_del_cliente_es_exitoso() {
-        assertNotNull(createdClient, "El objeto Cliente creado no debería ser nulo.");
-        assertNull(caughtException, "No debería haber ocurrido una excepción en el registro exitoso.");
-        cleanUp(clientToCreate.getDocumentNumber());
+    @Entonces("el registro del cliente debe ser exitoso \\(Código {int} Created)")
+    public void respuestaCreated(int code) throws Exception {
+        actions.andExpect(status().is(code));
     }
 
-    @And("el cliente recién creado debe tener el nombre completo {string}")
-    public void el_cliente_tiene_nombre_completo(String nombreCompletoEsperado) {
-        String nombreReal = createdClient.getName() + " " + createdClient.getLastNames();
-        assertEquals(nombreCompletoEsperado, nombreReal, "El nombre completo no coincide.");
+    @Y("el cliente recién creado debe tener el nombre completo {string}")
+    public void validaNombreCompleto(String fullName) throws Exception {
+        actions.andExpect(jsonPath("$.fullName").value(fullName));
     }
 
-    @And("la respuesta del sistema debe incluir un código de cliente que empiece por {string}")
-    public void la_respuesta_incluye_codigo_cliente(String prefix) {
-        String clientCode = createdClient.getClientCode();
-        assertNotNull(clientCode, "El código de cliente no debe ser nulo.");
-        assertTrue(clientCode.startsWith(prefix), "El código debe empezar por " + prefix);
+    @Y("la respuesta del sistema debe incluir un código de cliente que empiece por {string}")
+    public void validaCodigoConPrefijo(String prefix) throws Exception {
+        actions.andExpect(jsonPath("$.code").value(org.hamcrest.Matchers.startsWith(prefix)));
     }
 
-    @And("el cliente debe quedar almacenado en la base de datos")
-    public void el_cliente_queda_almacenado() {
-        Optional<Client> found = clientRepository.findByDocumentNumber(createdClient.getDocumentNumber());
-        assertTrue(found.isPresent(), "El cliente debe ser encontrado en la base de datos.");
+    @Y("el cliente debe quedar almacenado en la base de datos")
+    public void validaPersistencia() {
+        assertThat(repo.count()).isEqualTo(1);
     }
 
-    // --- THEN Steps para FALLA ---
+    // -------- utils --------
 
-    @Then("el registro del cliente debe fallar \\(Código 409 Conflict o 400 Bad Request)")
-    public void el_registro_debe_fallar() {
-        assertNotNull(caughtException, "Se esperaba una excepción de fallo.");
-        // Verificación BDD: Asegurar que el fallo fue por la razón de negocio esperada (duplicidad)
-        assertTrue(caughtException instanceof ClientAlreadyExistsException,
-                "Se esperaba ClientAlreadyExistsException, se encontró: " + caughtException.getClass().getSimpleName());
-    }
-
-    @And("la respuesta del sistema debe contener un mensaje de error indicando que el cliente ya existe")
-    public void la_respuesta_contiene_mensaje_de_error() {
-        String errorMessage = caughtException.getMessage();
-        assertTrue(errorMessage.contains("Ya existe un cliente registrado"),
-                "El mensaje de error no indica duplicidad.");
-    }
-
-    @And("no se debe crear un nuevo cliente en la base de datos")
-    public void no_se_debe_crear_un_nuevo_cliente() {
-        // En este punto, solo el cliente de precondición debe existir con ese número de documento.
-        Optional<Client> foundAttempts = clientRepository.findByDocumentNumber(clientToCreate.getDocumentNumber());
-
-        // Se asume que el repositorio solo devuelve el cliente de precondición.
-        assertTrue(foundAttempts.isPresent(), "El cliente de precondición debe seguir existiendo.");
+    private static String extractJsonField(String json, String field) {
+        if (json == null) return null;
+        String key = "\"" + field + "\":\"";
+        int i = json.indexOf(key);
+        if (i < 0) return null;
+        int s = i + key.length();
+        int e = json.indexOf('"', s);
+        return e > s ? json.substring(s, e) : null;
     }
 }
