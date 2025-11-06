@@ -1,106 +1,112 @@
 package co.edu.hotel.cleinteservice.services;
 
 import co.edu.hotel.cleinteservice.domain.Client;
+import co.edu.hotel.cleinteservice.domain.ClientCodeGenerator;
 import co.edu.hotel.cleinteservice.domain.DocumentType;
-import co.edu.hotel.cleinteservice.exceptions.ClientAlreadyExistsException;
+import co.edu.hotel.cleinteservice.dto.ClientResponse;
+import co.edu.hotel.cleinteservice.dto.CreateClientRequest;
+import co.edu.hotel.cleinteservice.repository.ClientRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
+import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Implementación del servicio de cliente usando un mapa en memoria (in-memory Map)
- * para simular la persistencia, eliminando la dependencia del ClientRepository.
- */
+import java.util.List;
+import java.util.Optional;
+
 @Service
 public class ClientService {
 
-    // Almacenamiento en memoria: Clave = Número de Documento (asumido único)
-    private final Map<String, Client> clientStore = new ConcurrentHashMap<>();
+    private final ClientRepository repository;
+    private final ClientCodeGenerator codeGenerator = new ClientCodeGenerator();
 
-    private final ClientCodeGenerator codeGenerator;
-    private static final String PREFIX = "CLI-";
-
-    // Se eliminó la inyección de ClientRepository
-    public ClientService(ClientCodeGenerator codeGenerator) {
-        this.codeGenerator = codeGenerator;
+    public ClientService(ClientRepository repository) {
+        this.repository = repository;
     }
 
-    public Client create(Client client) {
-        // VALIDACIÓN DE NEGOCIO: Evitar duplicidad de documento (la clave es el número de documento)
-        if (clientStore.containsKey(client.getDocumentNumber())) {
-            throw new ClientAlreadyExistsException(
-                    client.getDocumentType().toString(),
-                    client.getDocumentNumber()
-            );
+    @Transactional
+    public ClientResponse create(CreateClientRequest r) {
+        if (repository.existsByDocumentTypeAndDocumentNumber(r.documentType(), r.documentNumber()))
+            throw new IllegalArgumentException("Cliente ya existe (documento)");
+        if (repository.existsByEmail(r.email()))
+            throw new IllegalArgumentException("Cliente ya existe (email)");
+
+        String clientCode = codeGenerator.next();
+
+        Client client = Client.builder()
+                .clientCode(clientCode)
+                .documentType(r.documentType())
+                .documentNumber(r.documentNumber())
+                .name(r.name())
+                .lastNames(r.lastNames())
+                .email(r.email())
+                .phone(r.phone())
+                .build();
+
+        try {
+            repository.save(client);
+        } catch (DataIntegrityViolationException e) {
+            // fallback por si llegan duplicados concurrentes
+            throw new IllegalArgumentException("Duplicidad detectada");
         }
-
-        // Generación de código
-        if (client.getClientCode() == null || client.getClientCode().isBlank()) {
-            // Simular generación de código secuencial
-            String nextCode = codeGenerator.generate(PREFIX);
-            client.setClientCode(nextCode);
-        }
-
-        // Simular guardado en base de datos (se usa el documentNumber como clave)
-        clientStore.put(client.getDocumentNumber(), client);
-
-        return client;
+        return new ClientResponse(client.getClientCode(),
+                r.name() + " " + r.lastNames(),
+                r.email(),
+                r.phone());
     }
 
-    public Client update(Client client) {
-        if (!clientStore.containsKey(client.getDocumentNumber())) {
-            throw new RuntimeException("Client not found for update: " + client.getDocumentNumber());
-        }
-        // Simular actualización
-        clientStore.put(client.getDocumentNumber(), client);
-        return client;
-    }
-
+    @Transactional(readOnly = true)
     public List<Client> findAll() {
-        return List.copyOf(clientStore.values());
+        return repository.findAll();
     }
 
-    public Optional<Client> findByDocument(DocumentType documentType, String documentNumber) {
-        // Búsqueda por número de documento (la clave) y filtrado por tipo
-        return Optional.ofNullable(clientStore.get(documentNumber))
-                .filter(c -> c.getDocumentType().equals(documentType));
+    @Transactional(readOnly = true)
+    public Optional<Client> findByDocument(String documentNumber) {
+        return repository.findByDocumentNumber(documentNumber);
     }
 
+    @Transactional(readOnly = true)
     public boolean existsByDocument(DocumentType documentType, String documentNumber) {
-        return findByDocument(documentType, documentNumber).isPresent();
+        if (documentType == null || documentNumber == null || documentNumber.isBlank()) return false;
+        return repository.existsByDocumentTypeAndDocumentNumber(documentType, documentNumber);
     }
 
+    @Transactional(readOnly = true)
     public Optional<Client> findByEmail(String email) {
-        return clientStore.values().stream()
-                .filter(c -> email.equals(c.getEmail()))
-                .findFirst();
+        return repository.findByEmail(email);
     }
 
+    @Transactional(readOnly = true)
     public Optional<Client> findByPhone(String phone) {
-        return clientStore.values().stream()
-                .filter(c -> phone.equals(c.getPhone()))
-                .findFirst();
+        return repository.findByPhone(phone);
     }
 
+    @Transactional(readOnly = true)
     public boolean existsByDocumentNumber(String documentNumber) {
-        return clientStore.containsKey(documentNumber);
+        return repository.existsByDocumentNumber(documentNumber);
     }
 
+    @Transactional(readOnly = true)
     public boolean existsByEmail(String email) {
-        return findByEmail(email).isPresent();
+        return repository.existsByEmail(email);
     }
 
+    @Transactional(readOnly = true)
     public boolean existsByPhone(String phone) {
-        return findByPhone(phone).isPresent();
+        return repository.existsByPhone(phone);
     }
 
-    /**
-     * Método auxiliar para limpieza en pruebas BDD.
-     */
-    public void deleteByDocumentNumber(String documentNumber) {
-        clientStore.remove(documentNumber);
+    @Transactional
+    public void updateClient(Client client) {
+        Optional<Client> clientOptional = repository.findById(client.getId());
+        if (clientOptional.isPresent()) {
+            Client c = clientOptional.get();
+            c.setName(client.getName());
+            c.setEmail(client.getEmail());
+            c.setPhone(client.getPhone());
+            c.setDocumentNumber(client.getDocumentNumber());
+            repository.save(c);
+        } else {
+            throw new IllegalArgumentException("el cliente no fue encontrado");
+        }
     }
 }

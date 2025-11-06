@@ -1,37 +1,48 @@
 package co.edu.hotel.cleinteservice.domain;
 
 import jakarta.persistence.*;
-import lombok.Data;
-import java.util.UUID;
+import jakarta.validation.constraints.*;
+import lombok.*;
 
-@Data
+/**
+ * Entidad que representa un cliente del hotel.
+ */
 @Entity
-@Table(name = "clients")
+@Table(name = "clients",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_document", columnNames = {"document_type", "document_number"}),
+                @UniqueConstraint(name = "uk_email", columnNames = {"email"})
+        })
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Client {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
-    @Column(name = "client_code", unique = true, nullable = false)
+    @Column(nullable = false, unique = true)
     private String clientCode;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "document_type", nullable = false)
     private DocumentType documentType;
 
-    @Column(name = "document_number", unique = true, nullable = false)
+    @Column(name = "document_number", nullable = false, length = 30)
     private String documentNumber;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 60)
     private String name;
 
-    @Column(name = "last_names", nullable = false)
+    @Column(name = "last_names", nullable = false, length = 60)
     private String lastNames;
 
-    @Column(unique = true, nullable = false)
+    @Email
+    @Column(nullable = false, length = 120)
     private String email;
 
-    @Column(unique = true, nullable = false)
+    @Column(nullable = false, length = 20)
     private String phone;
 }

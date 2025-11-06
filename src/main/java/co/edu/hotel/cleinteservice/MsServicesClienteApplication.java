@@ -6,8 +6,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class MsServicesClienteApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(MsServicesClienteApplication.class, args);
-	}
+    public static void main(String[] args) {
+        SpringApplication.run(MsServicesClienteApplication.class, args);
+    }
 
 }
