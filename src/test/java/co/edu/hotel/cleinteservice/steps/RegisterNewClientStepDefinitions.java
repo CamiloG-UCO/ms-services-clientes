@@ -1,85 +1,101 @@
 package co.edu.hotel.cleinteservice.steps;
 
-import io.cucumber.java.en.Given;
-import io.cucumber.java.en.When;
-import io.cucumber.java.en.Then;
+import co.edu.hotel.cleinteservice.config.CucumberSpringConfiguration;
+import co.edu.hotel.cleinteservice.domain.DocumentType;
+import co.edu.hotel.cleinteservice.dto.CreateClientRequest;
+import co.edu.hotel.cleinteservice.repository.ClientRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.cucumber.datatable.DataTable;
-import io.restassured.response.Response;
-import io.restassured.http.ContentType;
-import org.junit.Assert;
+import io.cucumber.java.es.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.*;
 
-import java.util.HashMap;
 import java.util.Map;
 
-import static io.restassured.RestAssured.given;
-import org.springframework.boot.test.web.server.LocalServerPort; // <--- NUEVO IMPORT
-import io.cucumber.spring.CucumberContextConfiguration;
-import static io.restassured.RestAssured.port;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-public class RegisterNewClientStepDefinitions {
+public class RegisterNewClientStepDefinitions extends CucumberSpringConfiguration {
 
-    @LocalServerPort
-    private int localServerPort;
+    @Autowired private MockMvc mockMvc;
+    @Autowired private ObjectMapper objectMapper;
+    @Autowired private ClientRepository repo;
 
-    private String endpointPath = "/api/clientes"; // Guardamos solo el path
-    private Response response;
+    private ResultActions actions;
+    private String lastBody;
 
-    @Given("un endpoint de registro de clientes está disponible en \"{string}\"")
-    public void unEndpointDeRegistroDeClientesEstaDisponibleEn(String url) {
-        port = localServerPort;
-        System.out.println("DEBUG: Aplicación corriendo en puerto: " + localServerPort);
+    @Dado("el formulario de registro de clientes")
+    public void elFormularioDisponible() { /* no-op */ }
+
+    @Dado("un servicio para el registro de clientes está en funcionamiento y no existe previamente un cliente con CC {int}")
+    public void servicioOkYNoExiste(Integer docNumber) {
+        assertThat(repo.findByDocumentNumber(docNumber.toString())).isEmpty();
     }
 
-    @When("se envía una solicitud POST con el cuerpo:")
-    public void seEnviaUnaSolicitudPOSTConElCuerpo(DataTable datosTabla) {
-        // Mapear los datos de la tabla Gherkin a un mapa
-        Map<String, String> clienteDataTabla = datosTabla.asMaps().get(0);
+    @Cuando("el sistema cliente solicita la creación de un nuevo cliente con los siguientes datos:")
+    public void solicitaCreacion(DataTable table) throws Exception {
+        Map<String, String> row = table.asMaps().get(0);
 
-        // Adaptar los datos para el JSON, ya que 'name' y 'lastNames' están separados
-        Map<String, String> bodyJson = new HashMap<>();
-        bodyJson.put("documentType", clienteDataTabla.get("documentType"));
-        bodyJson.put("documentNumber", clienteDataTabla.get("documentNumber"));
-        bodyJson.put("name", clienteDataTabla.get("name"));
-        bodyJson.put("lastNames", clienteDataTabla.get("lastNames"));
-        bodyJson.put("email", clienteDataTabla.get("email"));
-        bodyJson.put("phone", clienteDataTabla.get("phone"));
+        var req = new CreateClientRequest(
+                DocumentType.valueOf(row.get("documentType")),
+                row.get("documentNumber"),
+                row.get("name"),
+                row.get("lastNames"),
+                row.get("email"),
+                row.get("phone")
+        );
 
-        // Llamada al ENDPOINT REAL
-        response = given()
-                .contentType(ContentType.JSON)
-                .body(bodyJson)
-                .when()
-                .post(endpointPath);
+        // 1) Disparamos la petición y obtenemos el MvcResult
+        ResultActions initial = mockMvc.perform(
+                post("/api/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req))
+        );
+        MvcResult result = initial.andReturn();
+
+        // 2) Si es async, hacemos asyncDispatch y guardamos en 'actions'; si no, usamos 'initial'
+        if (result.getRequest().isAsyncStarted()) {
+            this.actions = mockMvc.perform(asyncDispatch(result));
+        } else {
+            this.actions = initial;
+        }
+
+        // 3) Guardamos el body para verificaciones adicionales
+        this.lastBody = this.actions.andReturn().getResponse().getContentAsString();
     }
 
-    // --- Pasos de Verificación (Then) ---
-
-    @Then("el código de respuesta debe ser {int} \\(Created)")
-    public void elCodigoDeRespuestaDebeSerCreated(int statusCode) {
-        Assert.assertEquals("El código de respuesta HTTP no es 201 (Created).",
-                statusCode, response.getStatusCode());
+    @Entonces("el registro del cliente debe ser exitoso \\(Código {int} Created)")
+    public void respuestaCreated(int code) throws Exception {
+        actions.andExpect(status().is(code));
     }
 
-    @Then("el cliente debe ser guardado con el nombre \"{string}\"")
-    public void elClienteDebeSerGuardadoConElNombre(String nombreCompletoEsperado) {
-        // Verificar que la respuesta contiene el nombre y apellido correcto
-        String nombre = response.jsonPath().getString("name");
-        String apellido = response.jsonPath().getString("lastNames");
-        String nombreCompletoActual = nombre + " " + apellido;
-
-        Assert.assertTrue("El nombre retornado no coincide o el registro falló. Respuesta: " + response.asString(),
-                nombreCompletoEsperado.contains(nombre) && nombreCompletoEsperado.contains(apellido));
-
-        // Opcional: Podrías usar tu ClienteService (inyectado) para buscar en la BD y verificar.
+    @Y("el cliente recién creado debe tener el nombre completo {string}")
+    public void validaNombreCompleto(String fullName) throws Exception {
+        actions.andExpect(jsonPath("$.fullName").value(fullName));
     }
 
-    @Then("el sistema debe retornar el campo \"{word}\" con un valor que inicie con \"{word}\"")
-    public void elSistemaDebeRetornarElCampoConUnValorQueInicieCon(String campo, String prefijo) {
-        // Verificar la existencia y el formato del código generado automáticamente
-        String valorCampo = response.jsonPath().getString(campo);
+    @Y("la respuesta del sistema debe incluir un código de cliente que empiece por {string}")
+    public void validaCodigoConPrefijo(String prefix) throws Exception {
+        actions.andExpect(jsonPath("$.code").value(org.hamcrest.Matchers.startsWith(prefix)));
+    }
 
-        Assert.assertNotNull("El campo '" + campo + "' no fue retornado en la respuesta.", valorCampo);
-        Assert.assertTrue("El valor del campo '" + campo + "' debe iniciar con '" + prefijo + "'.",
-                valorCampo.startsWith(prefijo));
+    @Y("el cliente debe quedar almacenado en la base de datos")
+    public void validaPersistencia() {
+        assertThat(repo.count()).isEqualTo(1);
+    }
+
+    // -------- utils --------
+
+    private static String extractJsonField(String json, String field) {
+        if (json == null) return null;
+        String key = "\"" + field + "\":\"";
+        int i = json.indexOf(key);
+        if (i < 0) return null;
+        int s = i + key.length();
+        int e = json.indexOf('"', s);
+        return e > s ? json.substring(s, e) : null;
     }
 }
