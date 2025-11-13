@@ -101,9 +101,11 @@ public class ClientService {
         if (clientOptional.isPresent()) {
             Client c = clientOptional.get();
             c.setName(client.getName());
+            c.setLastNames(client.getLastNames());
             c.setEmail(client.getEmail());
             c.setPhone(client.getPhone());
             c.setDocumentNumber(client.getDocumentNumber());
+            c.setDocumentType(client.getDocumentType());
             repository.save(c);
         } else {
             throw new IllegalArgumentException("el cliente no fue encontrado");
